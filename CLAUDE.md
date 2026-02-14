@@ -12,6 +12,7 @@ n8n workflow that monitors the [Claude Code CHANGELOG.md](https://github.com/ant
 - `workflows/changelog-monitor-v2.json` — v2 레거시 (참조용, v3로 대체됨)
 - `workflows/changelog-monitor.json` — v1 레거시 (참조용, v2로 대체됨)
 - `docs/sop.md` — Full deployment SOP for AWS EC2 Free Tier + Docker self-hosting
+- `infra/` — Terraform IaC로 AWS EC2 + n8n 자동 배포 (`terraform apply` 한 번으로 완료)
 - `.mcp.json` — n8n-mcp server config for node/template reference during development
 
 ## Workflow Architecture
@@ -62,7 +63,18 @@ Use mcp__n8n-mcp__validate_workflow with the full JSON from workflows/changelog-
 
 ## Deployment
 
-Target: AWS EC2 Free Tier (`t2.micro`) running n8n via Docker. Full step-by-step instructions in `docs/sop.md`.
+Target: AWS EC2 Free Tier (`t2.micro`) running n8n via Docker.
+
+- **수동 배포**: `docs/sop.md` 참조
+- **Terraform 자동 배포**:
+  ```bash
+  cd infra
+  cp terraform.tfvars.example terraform.tfvars  # 변수 편집
+  terraform init
+  terraform plan
+  terraform apply
+  ```
+  배포 후 `n8n_url` output으로 웹 UI 접속 → Owner 계정 생성 → Credentials 설정 → 워크플로우 Import
 
 ## Language
 
