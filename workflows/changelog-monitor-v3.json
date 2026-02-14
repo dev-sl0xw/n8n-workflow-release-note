@@ -115,28 +115,28 @@
     {
       "id": "a1b2c3d4-0006-4a00-9000-000000000006",
       "name": "Send Email Notification",
-      "type": "n8n-nodes-base.emailSend",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
       "position": [1400, 300],
       "parameters": {
+        "resource": "message",
         "operation": "send",
-        "fromEmail": "={{ $credentials.user }}",
-        "toEmail": "slow0x.dev+release@gmail.com",
+        "sendTo": "slow0x.dev+release@gmail.com",
         "subject": "={{ $json.subject }}",
-        "emailFormat": "html",
-        "html": "={{ $json.htmlBody }}",
+        "emailType": "html",
+        "message": "={{ $json.htmlBody }}",
         "options": {
           "appendAttribution": false
         }
       },
       "credentials": {
-        "smtp": {
+        "gmailOAuth2": {
           "id": "",
-          "name": "Gmail SMTP"
+          "name": "Gmail OAuth2"
         }
       },
       "notesInFlow": true,
-      "notes": "Sends HTML email via Gmail SMTP"
+      "notes": "Sends HTML email via Gmail OAuth2 API"
     }
   ],
   "connections": {

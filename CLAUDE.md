@@ -58,7 +58,7 @@ Use mcp__n8n-mcp__validate_workflow with the full JSON from workflows/changelog-
 
 ## Credentials Required (configured in n8n, not in repo)
 
-- **SMTP** (`Gmail SMTP`): smtp.gmail.com:465 with app password
+- **Gmail OAuth2** (`Gmail OAuth2`): Google Cloud Console에서 OAuth2 Client ID/Secret 발급 후 n8n에서 연결
 - **Header Auth** (`Anthropic API Key`): `x-api-key` header with Anthropic API key
 
 ## Deployment
