@@ -1,0 +1,186 @@
+{
+  "name": "Claude Code Changelog Monitor",
+  "nodes": [
+    {
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 12
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Fetch CHANGELOG",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [470, 300],
+      "parameters": {
+        "url": "https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md",
+        "method": "GET",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "text"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Detect Changes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [690, 300],
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst currentContent = $input.first().json.body;\nconst currentEtag = $input.first().json.headers?.etag || '';\n\n// First run - store content and skip notification\nif (!staticData.lastContent) {\n  staticData.lastContent = currentContent;\n  staticData.lastEtag = currentEtag;\n  staticData.lastChecked = new Date().toISOString();\n  return [];\n}\n\n// Quick check: if ETag matches, no changes\nif (staticData.lastEtag && staticData.lastEtag === currentEtag) {\n  staticData.lastChecked = new Date().toISOString();\n  return [];\n}\n\n// Parse version sections from markdown\nfunction parseVersions(md) {\n  const sections = {};\n  const regex = /^## (\\d+\\.\\d+\\.\\d+)\\s*\\n([\\s\\S]*?)(?=\\n## \\d+\\.\\d+\\.\\d+|$)/gm;\n  let match;\n  while ((match = regex.exec(md)) !== null) {\n    sections[match[1]] = match[2].trim();\n  }\n  return sections;\n}\n\nconst oldVersions = parseVersions(staticData.lastContent);\nconst newVersions = parseVersions(currentContent);\n\nconst addedVersions = {};\nconst changedVersions = {};\nconst removedVersions = {};\n\nfor (const [version, content] of Object.entries(newVersions)) {\n  if (!oldVersions[version]) {\n    addedVersions[version] = content;\n  } else if (oldVersions[version] !== content) {\n    changedVersions[version] = { old: oldVersions[version], new: content };\n  }\n}\n\nfor (const [version, content] of Object.entries(oldVersions)) {\n  if (!newVersions[version]) {\n    removedVersions[version] = content;\n  }\n}\n\nconst hasChanges = Object.keys(addedVersions).length > 0\n  || Object.keys(changedVersions).length > 0\n  || Object.keys(removedVersions).length > 0;\n\nif (!hasChanges) {\n  staticData.lastContent = currentContent;\n  staticData.lastEtag = currentEtag;\n  staticData.lastChecked = new Date().toISOString();\n  return [];\n}\n\nstaticData.lastContent = currentContent;\nstaticData.lastEtag = currentEtag;\nstaticData.lastChecked = new Date().toISOString();\n\nreturn [{\n  json: {\n    addedVersions,\n    changedVersions,\n    removedVersions\n  }\n}];"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Translate to Korean",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [910, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-sonnet-4-5-20250929', max_tokens: 4096, messages: [{ role: 'user', content: '다음 Claude Code 변경 로그 내용을 한국어로 번역해주세요. 기술 용어(API, CLI, SDK 등)는 영어 그대로 유지하고, 마크다운 형식을 유지해주세요.\\n\\n' + (Object.keys($json.addedVersions || {}).length > 0 ? '새로운 버전:\\n' + Object.entries($json.addedVersions).map(([v,c]) => '## ' + v + '\\n' + c).join('\\n\\n') : '') + (Object.keys($json.changedVersions || {}).length > 0 ? '\\n변경된 버전:\\n' + Object.entries($json.changedVersions).map(([v,c]) => '## ' + v + '\\n' + c.new).join('\\n\\n') : '') }] }) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Anthropic API Key"
+        }
+      }
+    },
+    {
+      "id": "a1b2c3d4-0005-4000-8000-000000000005",
+      "name": "Generate HTML Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1130, 300],
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst translationResponse = input.content?.[0]?.text || '';\nconst diffData = $('Detect Changes').first().json;\nconst { addedVersions, changedVersions, removedVersions } = diffData;\n\nfunction escapeHtml(str) {\n  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n}\n\nfunction markdownBulletsToHtml(md) {\n  return md.split('\\n')\n    .filter(line => line.trim())\n    .map(line => {\n      const text = line.replace(/^-\\s*/, '');\n      const processed = escapeHtml(text).replace(/`([^`]+)`/g,\n        '<code style=\"background:#f0f0f0;padding:2px 6px;border-radius:3px;font-size:13px;\">$1</code>');\n      return '<li style=\"margin-bottom:6px;line-height:1.5;\">' + processed + '</li>';\n    })\n    .join('\\n');\n}\n\nlet htmlParts = [];\n\nhtmlParts.push('<div style=\"font-family:-apple-system,BlinkMacSystemFont,\\'Segoe UI\\',Roboto,sans-serif;max-width:700px;margin:0 auto;padding:20px;\">');\nhtmlParts.push('<h1 style=\"color:#1a1a2e;border-bottom:3px solid #6c5ce7;padding-bottom:10px;font-size:22px;\">Claude Code Changelog Update</h1>');\nhtmlParts.push('<p style=\"color:#666;font-size:13px;\">Detection Time: ' + new Date().toLocaleString('ko-KR', {timeZone:'Asia/Seoul'}) + ' (KST)</p>');\n\nif (addedVersions && Object.keys(addedVersions).length > 0) {\n  for (const [version, content] of Object.entries(addedVersions)) {\n    htmlParts.push('<div style=\"border-left:4px solid #00b894;background:#f0fff4;padding:15px;margin:15px 0;border-radius:0 8px 8px 0;\">');\n    htmlParts.push('<h2 style=\"color:#00b894;margin:0 0 10px 0;font-size:18px;\">New Version: ' + escapeHtml(version) + '</h2>');\n    htmlParts.push('<ul style=\"list-style:none;padding-left:0;margin:0;\">' + markdownBulletsToHtml(content) + '</ul>');\n    htmlParts.push('</div>');\n  }\n}\n\nif (changedVersions && Object.keys(changedVersions).length > 0) {\n  for (const [version, data] of Object.entries(changedVersions)) {\n    htmlParts.push('<div style=\"margin:15px 0;\">');\n    htmlParts.push('<h2 style=\"color:#6c5ce7;margin:0 0 10px 0;font-size:18px;\">Changed Version: ' + escapeHtml(version) + '</h2>');\n    htmlParts.push('<div style=\"border-left:4px solid #e74c3c;background:#fff5f5;padding:15px;margin:8px 0;border-radius:0 8px 8px 0;\">');\n    htmlParts.push('<h3 style=\"color:#e74c3c;margin:0 0 8px 0;font-size:14px;\">Previous (Removed)</h3>');\n    htmlParts.push('<ul style=\"list-style:none;padding-left:0;margin:0;text-decoration:line-through;color:#e74c3c;\">' + markdownBulletsToHtml(data.old) + '</ul>');\n    htmlParts.push('</div>');\n    htmlParts.push('<div style=\"border-left:4px solid #00b894;background:#f0fff4;padding:15px;margin:8px 0;border-radius:0 8px 8px 0;\">');\n    htmlParts.push('<h3 style=\"color:#00b894;margin:0 0 8px 0;font-size:14px;\">New (Added)</h3>');\n    htmlParts.push('<ul style=\"list-style:none;padding-left:0;margin:0;color:#00b894;\">' + markdownBulletsToHtml(data.new) + '</ul>');\n    htmlParts.push('</div>');\n    htmlParts.push('</div>');\n  }\n}\n\nif (removedVersions && Object.keys(removedVersions).length > 0) {\n  for (const [version, content] of Object.entries(removedVersions)) {\n    htmlParts.push('<div style=\"border-left:4px solid #e74c3c;background:#fff5f5;padding:15px;margin:15px 0;border-radius:0 8px 8px 0;\">');\n    htmlParts.push('<h2 style=\"color:#e74c3c;margin:0 0 10px 0;font-size:18px;\">Removed Version: ' + escapeHtml(version) + '</h2>');\n    htmlParts.push('<ul style=\"list-style:none;padding-left:0;margin:0;text-decoration:line-through;color:#e74c3c;\">' + markdownBulletsToHtml(content) + '</ul>');\n    htmlParts.push('</div>');\n  }\n}\n\nif (translationResponse) {\n  htmlParts.push('<div style=\"border-top:2px solid #ddd;margin-top:25px;padding-top:15px;\">');\n  htmlParts.push('<h2 style=\"color:#1a1a2e;font-size:18px;\">Korean Translation</h2>');\n  htmlParts.push('<div style=\"background:#f8f9fa;padding:15px;border-radius:8px;line-height:1.6;\">' + translationResponse.replace(/\\n/g, '<br>') + '</div>');\n  htmlParts.push('</div>');\n}\n\nhtmlParts.push('<div style=\"margin-top:25px;padding-top:15px;border-top:1px solid #eee;color:#999;font-size:11px;\">');\nhtmlParts.push('<p>This email was automatically generated by an n8n workflow.</p>');\nhtmlParts.push('<p>Source: <a href=\"https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md\">CHANGELOG.md</a></p>');\nhtmlParts.push('</div>');\nhtmlParts.push('</div>');\n\nconst htmlBody = htmlParts.join('');\nconst versionList = Object.keys(addedVersions || {}).concat(Object.keys(changedVersions || {}));\nconst subject = '[Claude Code] Changelog Update: ' + (versionList.join(', ') || 'Content Changed');\n\nreturn [{ json: { htmlBody, subject } }];"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0006-4000-8000-000000000006",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.sendEmail",
+      "typeVersion": 2.1,
+      "position": [1350, 300],
+      "parameters": {
+        "fromEmail": "={{ $credentials.user }}",
+        "toEmail": "slow0x.dev+release@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "html",
+        "html": "={{ $json.htmlBody }}",
+        "options": {}
+      },
+      "credentials": {
+        "smtp": {
+          "id": "",
+          "name": "Gmail SMTP"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch CHANGELOG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch CHANGELOG": {
+      "main": [
+        [
+          {
+            "node": "Detect Changes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Changes": {
+      "main": [
+        [
+          {
+            "node": "Translate to Korean",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Translate to Korean": {
+      "main": [
+        [
+          {
+            "node": "Generate HTML Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate HTML Email": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {},
+  "versionId": "",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": ""
+  },
+  "tags": []
+}
