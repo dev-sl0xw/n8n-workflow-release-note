@@ -19,7 +19,7 @@ n8n workflow that monitors the [Claude Code CHANGELOG.md](https://github.com/ant
 
 ```
 Schedule Trigger (12h) → Fetch CHANGELOG (HTTP) → Detect Changes (Code/staticData)
-  → Translate to Korean (Claude API via HTTP) → Generate HTML Email (Code) → Send Email (SMTP)
+  → Generate HTML Email (Code) → Send Email (Gmail OAuth2)
 ```
 
 ### v3 주요 개선사항 (v2 대비)
@@ -39,8 +39,7 @@ Schedule Trigger (12h) → Fetch CHANGELOG (HTTP) → Detect Changes (Code/stati
 - **Change detection**: `$getWorkflowStaticData('global')`로 이전 CHANGELOG 내용과 ETag를 실행 간 유지
 - **첫 실행 동작**: baseline 저장만 수행, 이메일 미발송 (`return []`로 flow 중단 → false positive 방지)
 - **ETag 최적화**: GitHub ETag 헤더 비교로 변경 없음 시 빠른 종료
-- **Translation**: raw HTTP Request to `api.anthropic.com/v1/messages` + Header Auth (`x-api-key`), not built-in LangChain nodes
-- **모델 버전 고정**: `claude-sonnet-4-5-20250929`
+- **Translation**: 제거됨 (Anthropic API key 불필요)
 - **버전 감지 정규식**: `/^## (\d+\.\d+\.\d+.*)/gm`
 - **색상 코딩**: green(추가), red(삭제), purple(변경)
 - **HTML email**: Code node에서 inline 생성 (별도 템플릿 파일 없음)
@@ -59,7 +58,6 @@ Use mcp__n8n-mcp__validate_workflow with the full JSON from workflows/changelog-
 ## Credentials Required (configured in n8n, not in repo)
 
 - **Gmail OAuth2** (`Gmail OAuth2`): Google Cloud Console에서 OAuth2 Client ID/Secret 발급 후 n8n에서 연결
-- **Header Auth** (`Anthropic API Key`): `x-api-key` header with Anthropic API key
 
 ## Deployment
 
