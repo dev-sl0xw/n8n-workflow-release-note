@@ -2,13 +2,16 @@
 
 [Claude Code](https://github.com/anthropics/claude-code)의 CHANGELOG.md를 12시간 간격으로 자동 모니터링하여, 버전별 변경 사항을 감지하고 색상 코딩된 HTML 이메일로 알림을 보내는 n8n 워크플로우입니다.
 
+n8n Cloud가 아닌 **AWS EC2에서 Docker로 셀프호스팅**하여 운영합니다. Terraform IaC로 인프라 프로비저닝부터 n8n 컨테이너 실행까지 자동화되어 있어, 외부 SaaS 의존 없이 자체 인프라에서 완전히 독립적으로 동작합니다.
+
 ## 주요 기능
 
 - **12시간 자동 모니터링** - Schedule Trigger로 CHANGELOG.md 변경 감지
 - **버전 단위 diff** - 새 버전 추가, 기존 버전 내용 변경, 버전 삭제를 구분
 - **색상 코딩 HTML 이메일** - 추가(초록), 삭제(빨강), 변경(보라) 시각적 구분
 - **ETag 최적화** - GitHub ETag 헤더 비교로 변경 없을 시 빠른 종료
-- **Terraform IaC** - `terraform apply` 한 번으로 AWS EC2 + n8n 자동 배포
+- **Self-hosted n8n** - AWS EC2 + Docker Compose로 셀프호스팅 (n8n Cloud 불필요)
+- **Terraform IaC** - `terraform apply` 한 번으로 EC2 인스턴스 생성부터 n8n 실행까지 자동 배포
 
 ## Workflow Architecture
 
@@ -106,15 +109,18 @@ terraform apply
 └── CLAUDE.md                       # Claude Code 개발 가이드
 ```
 
-## 인프라 구성
+## 인프라 구성 (Self-hosted)
+
+n8n Cloud 대신 AWS EC2에서 Docker 컨테이너로 직접 호스팅합니다. Free Tier 범위 내에서 운영 가능하며, `terraform apply` 한 번으로 아래 리소스가 모두 자동 생성됩니다.
 
 | 리소스 | 스펙 |
 |--------|------|
 | EC2 Instance | Amazon Linux 2023, t2.micro (Free Tier) |
 | Storage | 30GB gp3 (Free Tier 최대) |
 | Swap | 2GB (t2.micro 메모리 보완) |
-| Container | Docker + Docker Compose로 n8n 실행 |
+| Container | Docker + Docker Compose로 n8n 셀프호스팅 |
 | Network | Elastic IP + Security Group (SSH, n8n 포트) |
+| n8n 데이터 | Docker Volume (`n8n_data`)으로 영속 저장 |
 
 ## 버전 히스토리
 
